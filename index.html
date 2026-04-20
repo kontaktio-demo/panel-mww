@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="robots" content="noindex, nofollow">
-  <title>Panel Admina – MWW Mieszkanie</title>
+  <meta name="theme-color" content="#1a1a1a">
+  <title>Panel Admina - MWW Mieszkanie</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231a1a1a' stroke-width='2'><path d='M3 22V8L12 2l9 6v14'/><rect x='9' y='14' width='6' height='8'/></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,7 +17,6 @@
 </head>
 <body>
 
-<!-- ═══════════════ LOGIN SCREEN ═══════════════ -->
 <div id="loginScreen" class="login-screen">
   <div class="login-card">
     <div class="login-logo">MWW <strong>Mieszkanie</strong></div>
@@ -26,21 +27,21 @@
     </div>
     <div class="form-field">
       <label for="loginPass">Hasło</label>
-      <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password">
+      <input type="password" id="loginPass" placeholder="Hasło" autocomplete="current-password">
     </div>
     <button class="btn-login" id="loginBtn">Zaloguj się</button>
     <p class="login-error" id="loginError"></p>
   </div>
 </div>
 
-<!-- ═══════════════ MAIN APP ═══════════════ -->
+<div id="sidebarBackdrop" class="sidebar-backdrop" aria-hidden="true"></div>
+
 <div id="app" class="app" style="display:none">
 
-  <!-- Sidebar -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <span class="sidebar-logo">MWW <strong>Panel</strong></span>
-      <button class="sidebar-close" id="sidebarClose" aria-label="Zamknij menu">✕</button>
+      <button class="sidebar-close" id="sidebarClose" aria-label="Zamknij menu">X</button>
     </div>
     <nav class="sidebar-nav">
       <a href="#" class="sidebar-link active" data-page="dashboard">
@@ -72,7 +73,6 @@
     </div>
   </aside>
 
-  <!-- Main content -->
   <main class="main-content">
     <header class="topbar">
       <button class="hamburger-btn" id="hamburgerBtn" aria-label="Otwórz menu">
@@ -84,28 +84,12 @@
       </div>
     </header>
 
-    <div class="page-content" id="pageContent">
-      <!-- Dynamic content loaded here -->
-    </div>
+    <div class="page-content" id="pageContent"></div>
   </main>
 </div>
 
-<!-- ═══════════════ EDIT MODAL ═══════════════ -->
-<div class="modal-overlay" id="editModal">
-  <div class="modal-box modal-large">
-    <div class="modal-header">
-      <h2 id="editModalTitle">Edytuj ofertę</h2>
-      <button class="modal-close-btn" id="editModalClose">✕</button>
-    </div>
-    <div class="modal-body" id="editModalBody">
-      <!-- Edit form loaded dynamically -->
-    </div>
-  </div>
-</div>
-
-<!-- ═══════════════ IMAGE LIGHTBOX ═══════════════ -->
 <div class="lightbox" id="lightbox">
-  <button class="lightbox-close" id="lightboxClose">✕</button>
+  <button class="lightbox-close" id="lightboxClose" aria-label="Zamknij podgląd">X</button>
   <img id="lightboxImg" src="" alt="Podgląd">
 </div>
 
