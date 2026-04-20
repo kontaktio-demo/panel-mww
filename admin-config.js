@@ -1,18 +1,8 @@
 'use strict';
 
-/*
- * ============================================================
- *  Admin Panel – Konfiguracja
- * ============================================================
- *  Zmień API_BASE_URL na adres Twojego backendu na Render.
- * ============================================================
- */
-
 const ADMIN_CONFIG = Object.freeze({
-  // Adres backendu
   API_BASE_URL: 'https://backend-mww.onrender.com',
 
-  // Endpointy
   ENDPOINTS: Object.freeze({
     AUTH_LOGIN:       '/api/auth/login',
     AUTH_VERIFY:      '/api/auth/verify',

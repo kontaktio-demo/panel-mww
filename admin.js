@@ -1,10 +1,5 @@
 'use strict';
 
-/* ============================================================
-   MWW Admin Panel – Main Application Logic
-   ============================================================ */
-
-// ─── State ───────────────────────────────────────────────
 const state = {
   token: '',
   user: null,
@@ -19,7 +14,6 @@ const state = {
 
 const SESSION_IDLE_LIMIT_MS = 30 * 60 * 1000;
 
-// ─── Helpers ─────────────────────────────────────────────
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 const API = () => ADMIN_CONFIG.API_BASE_URL;
@@ -101,7 +95,6 @@ function pricePerM2(price, area) {
   return Math.round(p / a);
 }
 
-// ─── Toast notifications ─────────────────────────────────
 function initToasts() {
   if (!$('.toast-container')) {
     const c = document.createElement('div');
@@ -118,7 +111,6 @@ function toast(msg, type) {
   setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 4000);
 }
 
-// ─── API Calls ───────────────────────────────────────────
 async function apiGet(endpoint) {
   const res = await fetch(API() + endpoint, { headers: authHeaders() });
   if (res.status === 401) { clearToken(); showLogin(); throw new Error('Unauthorized'); }
@@ -168,13 +160,13 @@ const UPLOAD_LIMITS = Object.freeze({
 function validateFile(file) {
   if (!file) return 'Brak pliku.';
   if (file.size > UPLOAD_LIMITS.MAX_FILE_SIZE) {
-    return file.name + ': plik jest za duzy (max 10 MB).';
+    return file.name + ': plik jest za duży (max 10 MB).';
   }
   if (file.type && !UPLOAD_LIMITS.ACCEPT_MIME.test(file.type)) {
-    return file.name + ': nieobslugiwany format. Dozwolone: JPG, PNG, WebP, AVIF.';
+    return file.name + ': nieobsługiwany format. Dozwolone: JPG, PNG, WebP, AVIF.';
   }
   if (!file.type && !UPLOAD_LIMITS.ACCEPT_EXT.test(file.name)) {
-    return file.name + ': nieobslugiwany format pliku.';
+    return file.name + ': nieobsługiwany format pliku.';
   }
   return '';
 }
@@ -203,7 +195,6 @@ async function uploadMultipleImages(files) {
   return data.images;
 }
 
-// ─── Auth ────────────────────────────────────────────────
 function showLogin() {
   $('#loginScreen').style.display = 'flex';
   $('#app').style.display = 'none';
@@ -267,7 +258,6 @@ async function verifySession() {
       clearToken();
     }
   } catch {
-    // Token might still be valid, network issue
   }
 }
 
@@ -279,11 +269,10 @@ function doLogout() {
   $('#loginError').textContent = '';
 }
 
-// ─── Navigation ──────────────────────────────────────────
 function navigateTo(page, opts) {
   opts = opts || {};
   if (state.formDirty && !opts.force) {
-    if (!confirm('Masz niezapisane zmiany. Opuscic strone bez zapisywania?')) return;
+    if (!confirm('Masz niezapisane zmiany. Opuścić stronę bez zapisywania?')) return;
   }
   state.formDirty = false;
   state.currentPage = page;
@@ -295,8 +284,8 @@ function navigateTo(page, opts) {
   const titles = {
     dashboard: 'Dashboard',
     offers: 'Oferty',
-    add: 'Dodaj oferte',
-    preview: 'Podglad strony',
+    add: 'Dodaj ofertę',
+    preview: 'Podgląd strony',
     settings: 'Ustawienia',
   };
   $('#pageTitle').textContent = titles[page] || page;
@@ -327,10 +316,9 @@ function closeSidebar() {
   document.body.classList.remove('no-scroll');
 }
 
-// ─── Dashboard ───────────────────────────────────────────
 async function renderDashboard() {
   const content = $('#pageContent');
-  content.innerHTML = '<div class="stats-grid"><div class="stat-card"><div class="stat-number">–</div><div class="stat-label">Ładowanie...</div></div></div>';
+  content.innerHTML = '<div class="stats-grid"><div class="stat-card"><div class="stat-number">-</div><div class="stat-label">Ładowanie...</div></div></div>';
 
   try {
     const [stats, offers] = await Promise.all([
@@ -417,7 +405,7 @@ function categoryLabel(cat) {
     lokal: 'Lokale', biuro: 'Biura', garaz: 'Garaże',
     magazyn: 'Magazyny', inne: 'Inne',
   };
-  return map[cat] || cat || '–';
+  return map[cat] || cat || '-';
 }
 
 function getOfferThumb(offer) {
@@ -436,7 +424,6 @@ function getOfferImg(offer) {
   return offer.img || '';
 }
 
-// ─── Offers List ─────────────────────────────────────────
 async function renderOffers() {
   const content = $('#pageContent');
   content.innerHTML = '<p style="color:var(--text-muted)">Ładowanie ofert...</p>';
@@ -455,7 +442,6 @@ function renderOffersTable(searchTerm, filterType, filterStatus) {
   const content = $('#pageContent');
   let offers = [...state.offers];
 
-  // Apply filters
   if (searchTerm) {
     const q = searchTerm.toLowerCase();
     offers = offers.filter(o =>
@@ -501,16 +487,16 @@ function renderOffersTable(searchTerm, filterType, filterStatus) {
                   <td><span class="tbl-title">${escHtml(o.title)}</span><br><span class="tbl-sub">${categoryLabel(o.category)}</span></td>
                   <td><span class="badge ${o.type === 'sprzedaz' ? 'badge-sale' : 'badge-rent'}">${o.type === 'sprzedaz' ? 'Sprzedaż' : 'Wynajem'}</span></td>
                   <td style="white-space:nowrap">${formatPrice(o.price)} ${escHtml(o.currency || 'PLN')}</td>
-                  <td>${o.area || 0} m²</td>
+                  <td>${o.area || 0} m2</td>
                   <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(o.address)}</td>
                   <td><span class="badge ${o.active !== false ? 'badge-active' : 'badge-inactive'}">${o.active !== false ? 'Aktywna' : 'Nieaktywna'}</span></td>
-                  <td>${o.featured ? '<span class="badge badge-featured">★</span>' : '–'}</td>
+                  <td>${o.featured ? '<span class="badge badge-featured">TOP</span>' : '-'}</td>
                   <td>${o.views || 0}</td>
                   <td>
                     <div class="btn-group">
                       <button class="btn btn-outline btn-sm" onclick="openEditModal('${o._id || o.id}')">Edytuj</button>
                       <button class="btn btn-outline btn-sm" onclick="toggleOffer('${o._id || o.id}')">${o.active !== false ? 'Ukryj' : 'Pokaż'}</button>
-                      <button class="btn btn-outline btn-sm" onclick="toggleFeatured('${o._id || o.id}')">${o.featured ? 'Odznacz' : '★'}</button>
+                      <button class="btn btn-outline btn-sm" onclick="toggleFeatured('${o._id || o.id}')">${o.featured ? 'Odznacz' : 'Wyróżnij'}</button>
                       <button class="btn btn-outline btn-sm" onclick="previewSingle('${o._id || o.id}')">Podgląd</button>
                       <button class="btn btn-danger-outline btn-sm" onclick="deleteOffer('${o._id || o.id}')">Usuń</button>
                     </div>
@@ -524,7 +510,6 @@ function renderOffersTable(searchTerm, filterType, filterStatus) {
     </div>
   `;
 
-  // Bind search/filter events
   const searchInput = $('#offerSearch');
   const typeFilter = $('#offerFilterType');
   const statusFilter = $('#offerFilterStatus');
@@ -546,7 +531,6 @@ function renderOffersTable(searchTerm, filterType, filterStatus) {
   });
 }
 
-// ─── Offer CRUD ──────────────────────────────────────────
 async function toggleOffer(id) {
   try {
     await apiPatch(EP().OFFERS + '/' + id + '/toggle', {});
@@ -568,17 +552,16 @@ async function toggleFeatured(id) {
 }
 
 async function deleteOffer(id) {
-  if (!confirm('Czy na pewno chcesz usunac te oferte? Tej operacji nie mozna cofnac.')) return;
+  if (!confirm('Czy na pewno chcesz usunąć tę ofertę? Tej operacji nie można cofnąć.')) return;
   try {
     await apiDelete(EP().OFFERS + '/' + id);
-    toast('Oferta usunieta.', 'success');
+    toast('Oferta usunięta.', 'success');
     await renderOffers();
   } catch (err) {
-    toast('Blad: ' + err.message, 'error');
+    toast('Błąd: ' + err.message, 'error');
   }
 }
 
-// ─── Add Offer Form ──────────────────────────────────────
 function renderAddForm(prefill) {
   state.uploadedImages = prefill ? (prefill.images || []) : [];
   const o = prefill || {};
@@ -653,11 +636,11 @@ function renderAddForm(prefill) {
           <input type="number" id="fRooms" placeholder="0" min="0" max="999" inputmode="numeric" value="${o.rooms || ''}">
         </div>
         <div class="form-field">
-          <label>Pietro</label>
+          <label>Piętro</label>
           <input type="number" id="fFloor" placeholder="np. 3" min="0" max="999" inputmode="numeric" value="${o.floor || ''}">
         </div>
         <div class="form-field">
-          <label>Lacznie pieter</label>
+          <label>Łącznie pięter</label>
           <input type="number" id="fTotalFloors" placeholder="np. 7" min="0" max="999" inputmode="numeric" value="${o.totalFloors || ''}">
         </div>
       </div>
@@ -701,7 +684,7 @@ function renderAddForm(prefill) {
         <div class="form-field">
           <label>Rodzaj budynku</label>
           <select id="fBuildingType">
-            <option value="">– brak –</option>
+            <option value="">- brak -</option>
             ${['blok','kamienica','apartamentowiec','dom wolnostojący','bliźniak','szeregowiec','loft','plomba'].map(t =>
               `<option value="${t}" ${o.buildingType === t ? 'selected' : ''}>${t}</option>`
             ).join('')}
@@ -710,7 +693,7 @@ function renderAddForm(prefill) {
         <div class="form-field">
           <label>Materiał budynku</label>
           <select id="fBuildingMaterial">
-            <option value="">– brak –</option>
+            <option value="">- brak -</option>
             ${['cegła','wielka płyta','beton','drewno','pustak','silikat','inne'].map(t =>
               `<option value="${t}" ${o.buildingMaterial === t ? 'selected' : ''}>${t}</option>`
             ).join('')}
@@ -721,7 +704,7 @@ function renderAddForm(prefill) {
         <div class="form-field">
           <label>Ogrzewanie</label>
           <select id="fHeatingType">
-            <option value="">– brak –</option>
+            <option value="">- brak -</option>
             ${['miejskie','gazowe','elektryczne','kominkowe','podłogowe','pompa ciepła','inne'].map(t =>
               `<option value="${t}" ${o.heatingType === t ? 'selected' : ''}>${t}</option>`
             ).join('')}
@@ -730,7 +713,7 @@ function renderAddForm(prefill) {
         <div class="form-field">
           <label>Stan</label>
           <select id="fCondition">
-            <option value="">– brak –</option>
+            <option value="">- brak -</option>
             ${['do zamieszkania','do remontu','deweloperski','po remoncie','w budowie','surowy'].map(t =>
               `<option value="${t}" ${o.condition === t ? 'selected' : ''}>${t}</option>`
             ).join('')}
@@ -739,7 +722,7 @@ function renderAddForm(prefill) {
         <div class="form-field">
           <label>Parking</label>
           <select id="fParking">
-            <option value="">– brak –</option>
+            <option value="">- brak -</option>
             ${['garaż','miejsce podziemne','miejsce naziemne','brak'].map(t =>
               `<option value="${t}" ${o.parking === t ? 'selected' : ''}>${t}</option>`
             ).join('')}
@@ -775,13 +758,13 @@ function renderAddForm(prefill) {
       </div>
       <div class="form-row">
         <div class="form-field">
-          <label>Pow. działki (m²)</label>
+          <label>Pow. działki (m2)</label>
           <input type="number" id="fPlotArea" placeholder="np. 1000" min="0" value="${o.plotArea || ''}">
         </div>
         <div class="form-field">
           <label>Typ działki</label>
           <select id="fPlotType">
-            <option value="">– brak –</option>
+            <option value="">- brak -</option>
             ${['budowlana','rolna','rekreacyjna','leśna','inwestycyjna','siedliskowa'].map(t =>
               `<option value="${t}" ${o.plotType === t ? 'selected' : ''}>${t}</option>`
             ).join('')}
@@ -814,15 +797,15 @@ function renderAddForm(prefill) {
       </div>
       <div class="form-row">
         <div class="form-field">
-          <label>Agent – imię</label>
+          <label>Agent - imię</label>
           <input type="text" id="fAgentName" value="${escHtml(o.agentName || '')}">
         </div>
         <div class="form-field">
-          <label>Agent – telefon</label>
+          <label>Agent - telefon</label>
           <input type="text" id="fAgentPhone" value="${escHtml(o.agentPhone || '')}">
         </div>
         <div class="form-field">
-          <label>Agent – email</label>
+          <label>Agent - email</label>
           <input type="email" id="fAgentEmail" value="${escHtml(o.agentEmail || '')}">
         </div>
       </div>
@@ -854,7 +837,7 @@ function renderAddForm(prefill) {
       <div class="form-row">
         <div class="form-field">
           <label>URL do filmu (YouTube/Vimeo)</label>
-          <input type="url" id="fVideoUrl" placeholder="https://youtube.com/..." value="${escHtml(o.videoUrl || '')}">
+          <input type="url" id="fVideoUrl" placeholder="https:
         </div>
         <div class="form-field">
           <label>Spacer wirtualny 3D (URL)</label>
@@ -879,9 +862,9 @@ function renderAddForm(prefill) {
       </div>
       <div class="upload-zone" id="uploadZone">
         <input type="file" id="fileInput" multiple accept="image/*">
-        <div class="upload-zone-icon">📷</div>
+        <div class="upload-zone-icon"></div>
         <div class="upload-zone-text">Przeciągnij zdjęcia tutaj lub kliknij aby wybrać</div>
-        <div class="upload-zone-hint">JPG, PNG, WebP, AVIF • max 10 MB per zdjęcie • maks. 20 zdjęć</div>
+        <div class="upload-zone-hint">JPG, PNG, WebP, AVIF | max 10 MB na zdjęcie | maks. 20 zdjęć</div>
       </div>
       <div class="upload-progress" id="uploadProgress">
         <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
@@ -941,13 +924,13 @@ async function handleFiles(files) {
 
   const remaining = UPLOAD_LIMITS.MAX_FILES - state.uploadedImages.length;
   if (remaining <= 0) {
-    toast('Osiagnieto limit ' + UPLOAD_LIMITS.MAX_FILES + ' zdjec na oferte.', 'error');
+    toast('Osiągnięto limit ' + UPLOAD_LIMITS.MAX_FILES + ' zdjęć na ofertę.', 'error');
     return;
   }
   const accepted = [];
   for (const f of list) {
     if (accepted.length >= remaining) {
-      toast('Pominieto czesc plikow - limit ' + UPLOAD_LIMITS.MAX_FILES + ' zdjec.', 'info');
+      toast('Pominięto część plików - limit ' + UPLOAD_LIMITS.MAX_FILES + ' zdjęć.', 'info');
       break;
     }
     const err = validateFile(f);
@@ -962,25 +945,25 @@ async function handleFiles(files) {
 
   if (progress) progress.style.display = 'block';
   if (fill) fill.style.width = '0%';
-  if (status) status.textContent = 'Przesylanie 0/' + accepted.length + '...';
+  if (status) status.textContent = 'Przesyłanie 0/' + accepted.length + '...';
 
   let done = 0, ok = 0;
   for (const file of accepted) {
     try {
-      if (status) status.textContent = 'Przesylanie ' + (done + 1) + '/' + accepted.length + ': ' + file.name;
+      if (status) status.textContent = 'Przesyłanie ' + (done + 1) + '/' + accepted.length + ': ' + file.name;
       const img = await uploadImage(file);
       if (img) {
         state.uploadedImages.push(img);
         ok++;
       }
     } catch (err) {
-      toast('Blad przesylania: ' + (err.message || file.name), 'error');
+      toast('Błąd przesyłania: ' + (err.message || file.name), 'error');
     }
     done++;
     if (fill) fill.style.width = Math.round((done / accepted.length) * 100) + '%';
   }
 
-  if (status) status.textContent = 'Przeslano ' + ok + '/' + accepted.length + ' zdjec.';
+  if (status) status.textContent = 'Przesłano ' + ok + '/' + accepted.length + ' zdjęć.';
   setTimeout(() => { if (progress) progress.style.display = 'none'; }, 2000);
   const input = $('#fileInput');
   if (input) input.value = '';
@@ -1006,12 +989,12 @@ function renderImagesPreview() {
       '<div class="preview-item">' +
         '<img src="' + escAttr(thumb) + '" alt="' + alt + '" data-full="' + escAttr(full) + '" loading="lazy">' +
         '<div class="preview-actions">' +
-          (idx > 0 ? '<button type="button" class="preview-btn" data-act="up" data-idx="' + idx + '" aria-label="Przesun w lewo">&#8592;</button>' : '') +
-          (idx < last ? '<button type="button" class="preview-btn" data-act="down" data-idx="' + idx + '" aria-label="Przesun w prawo">&#8594;</button>' : '') +
-          (idx > 0 ? '<button type="button" class="preview-btn" data-act="main" data-idx="' + idx + '" aria-label="Ustaw jako glowne">&#9733;</button>' : '') +
-          '<button type="button" class="preview-remove" data-act="remove" data-idx="' + idx + '" aria-label="Usun zdjecie">&#10005;</button>' +
+          (idx > 0 ? '<button type="button" class="preview-btn" data-act="up" data-idx="' + idx + '" aria-label="Przesuń w lewo">&#8592;</button>' : '') +
+          (idx < last ? '<button type="button" class="preview-btn" data-act="down" data-idx="' + idx + '" aria-label="Przesuń w prawo">&#8594;</button>' : '') +
+          (idx > 0 ? '<button type="button" class="preview-btn" data-act="main" data-idx="' + idx + '" aria-label="Ustaw jako główne">&#9733;</button>' : '') +
+          '<button type="button" class="preview-remove" data-act="remove" data-idx="' + idx + '" aria-label="Usuń zdjęcie">&#10005;</button>' +
         '</div>' +
-        (idx === 0 ? '<span class="preview-main-badge">Glowne</span>' : '') +
+        (idx === 0 ? '<span class="preview-main-badge">Główne</span>' : '') +
       '</div>';
   }).join('');
 
@@ -1121,15 +1104,15 @@ function validateOffer(data) {
   const errors = [];
   clearInvalid();
 
-  if (!data.title) { errors.push('Wpisz tytul.'); markInvalid('fTitle', true); }
-  else if (data.title.length > 200) { errors.push('Tytul moze miec max 200 znakow.'); markInvalid('fTitle', true); }
+  if (!data.title) { errors.push('Wpisz tytuł.'); markInvalid('fTitle', true); }
+  else if (data.title.length > 200) { errors.push('Tytuł może mieć max 200 znaków.'); markInvalid('fTitle', true); }
 
-  if (!(data.price > 0)) { errors.push('Cena musi byc wieksza od zera.'); markInvalid('fPrice', true); }
-  if (!(data.area > 0)) { errors.push('Powierzchnia musi byc wieksza od zera.'); markInvalid('fArea', true); }
+  if (!(data.price > 0)) { errors.push('Cena musi być większa od zera.'); markInvalid('fPrice', true); }
+  if (!(data.area > 0)) { errors.push('Powierzchnia musi być większa od zera.'); markInvalid('fArea', true); }
   if (!data.address) { errors.push('Wpisz adres.'); markInvalid('fAddress', true); }
 
   if (data.totalFloors && data.floor && data.floor > data.totalFloors) {
-    errors.push('Pietro nie moze byc wieksze niz laczna liczba pieter.');
+    errors.push('Piętro nie może być większe niż łączna liczba pięter.');
     markInvalid('fFloor', true);
     markInvalid('fTotalFloors', true);
   }
@@ -1140,13 +1123,13 @@ function validateOffer(data) {
   }
 
   const urlOk = (u) => !u || /^https?:\/\//i.test(u);
-  if (!urlOk(data.videoUrl)) { errors.push('URL filmu musi zaczynac sie od http(s)://'); markInvalid('fVideoUrl', true); }
-  if (!urlOk(data.virtualTourUrl)) { errors.push('URL spaceru musi zaczynac sie od http(s)://'); markInvalid('fVirtualTourUrl', true); }
-  if (!urlOk(data.sourceUrl)) { errors.push('URL zrodla musi zaczynac sie od http(s)://'); markInvalid('fSourceUrl', true); }
-  if (data.img && !urlOk(data.img)) { errors.push('URL zdjecia musi zaczynac sie od http(s)://'); markInvalid('fImgUrl', true); }
+  if (!urlOk(data.videoUrl)) { errors.push('URL filmu musi zaczynać się od http(s)://'); markInvalid('fVideoUrl', true); }
+  if (!urlOk(data.virtualTourUrl)) { errors.push('URL spaceru musi zaczynać się od http(s)://'); markInvalid('fVirtualTourUrl', true); }
+  if (!urlOk(data.sourceUrl)) { errors.push('URL źródła musi zaczynać się od http(s)://'); markInvalid('fSourceUrl', true); }
+  if (data.img && !urlOk(data.img)) { errors.push('URL zdjęcia musi zaczynać się od http(s)://'); markInvalid('fImgUrl', true); }
 
   if (data.shortDesc && data.shortDesc.length > 300) {
-    errors.push('Krotki opis moze miec max 300 znakow.');
+    errors.push('Krótki opis może mieć max 300 znaków.');
     markInvalid('fShortDesc', true);
   }
 
@@ -1197,14 +1180,14 @@ async function submitNewOffer() {
   try {
     await apiPost(EP().OFFERS, data);
     state.formDirty = false;
-    toast('Oferta dodana pomyslnie!', 'success');
+    toast('Oferta dodana pomyślnie!', 'success');
     state.uploadedImages = [];
     navigateTo('offers');
   } catch (err) {
-    toast('Blad: ' + err.message, 'error');
+    toast('Błąd: ' + err.message, 'error');
   }
 
-  btn.textContent = 'Dodaj oferte';
+  btn.textContent = 'Dodaj ofertę';
   btn.disabled = false;
 }
 
@@ -1229,14 +1212,13 @@ async function submitEditOffer(id) {
     state.uploadedImages = [];
     navigateTo('offers');
   } catch (err) {
-    toast('Blad: ' + err.message, 'error');
+    toast('Błąd: ' + err.message, 'error');
   }
 
   btn.textContent = 'Zapisz zmiany';
   btn.disabled = false;
 }
 
-// ─── Edit Modal / Inline Edit ────────────────────────────
 async function openEditModal(id) {
   const offer = state.offers.find(o => (o._id || o.id) === id);
   if (!offer) { toast('Nie znaleziono oferty.', 'error'); return; }
@@ -1246,7 +1228,6 @@ async function openEditModal(id) {
   renderAddForm(offer);
 }
 
-// ─── Preview ─────────────────────────────────────────────
 async function renderPreview() {
   const content = $('#pageContent');
 
@@ -1259,7 +1240,7 @@ async function renderPreview() {
   content.innerHTML = `
     <div class="card" style="margin-bottom:24px">
       <div class="card-header">
-        <div class="card-title">Podgląd strony – tak wyglądają oferty na stronie</div>
+        <div class="card-title">Podgląd strony - tak wyglądają oferty na stronie</div>
       </div>
       <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:16px">
         Poniżej widzisz podgląd ${activeOffers.length} aktywnych ofert tak jak będą wyglądać na stronie ofert.
@@ -1282,19 +1263,19 @@ function renderPreviewCard(o) {
   return `
     <div class="preview-card" onclick="previewSingle('${o._id || o.id}')" style="cursor:pointer">
       <div class="preview-card-photo">
-        ${imgSrc ? `<img src="${escAttr(safeImgSrc(imgSrc))}" alt="${escAttr(o.title || '')}" loading="lazy" onerror="this.style.display='none'">` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)">Brak zdjecia</div>'}
+        ${imgSrc ? `<img src="${escAttr(safeImgSrc(imgSrc))}" alt="${escAttr(o.title || '')}" loading="lazy" onerror="this.style.display='none'">` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)">Brak zdjęcia</div>'}
         <span class="preview-card-badge" ${o.type === 'wynajem' ? 'style="background:#555"' : ''}>${typeLabel}</span>
-        ${o.featured ? '<span class="preview-card-badge" style="left:auto;right:12px;background:var(--warning)">★ Wyróżniona</span>' : ''}
+        ${o.featured ? '<span class="preview-card-badge" style="left:auto;right:12px;background:var(--warning)">Wyróżniona</span>' : ''}
       </div>
       <div class="preview-card-body">
         <div class="preview-price">${fmtPrice} <span class="preview-price-sub">${escHtml(o.currency || 'PLN')}</span></div>
         <div class="preview-title">${escHtml(o.title)}</div>
         <div class="preview-meta">
-          <span class="preview-meta-item">📐 ${o.area} m²</span>
-          ${o.rooms ? `<span class="preview-meta-item">🚪 ${o.rooms} pok.</span>` : ''}
-          ${o.floor ? `<span class="preview-meta-item">🏢 ${o.floor}/${o.totalFloors || '?'} p.</span>` : ''}
+          <span class="preview-meta-item">${o.area} m2</span>
+          ${o.rooms ? `<span class="preview-meta-item">${o.rooms} pok.</span>` : ''}
+          ${o.floor ? `<span class="preview-meta-item">${o.floor}/${o.totalFloors || '?'} p.</span>` : ''}
         </div>
-        <div style="font-size:.82rem;color:var(--text-muted);margin-bottom:8px">📍 ${escHtml(o.address)}</div>
+        <div style="font-size:.82rem;color:var(--text-muted);margin-bottom:8px">${escHtml(o.address)}</div>
         ${o.shortDesc || o.desc ? `<p class="preview-desc" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${escHtml(o.shortDesc || o.desc)}</p>` : ''}
       </div>
     </div>
@@ -1324,13 +1305,13 @@ function previewSingle(id) {
     o.heatingType ? ['Ogrzewanie', o.heatingType] : null,
     o.condition ? ['Stan', o.condition] : null,
     o.parking ? ['Parking', o.parking] : null,
-    o.plotArea ? ['Pow. działki', o.plotArea + ' m²'] : null,
+    o.plotArea ? ['Pow. działki', o.plotArea + ' m2'] : null,
     o.plotType ? ['Typ działki', o.plotType] : null,
     o.utilities ? ['Media', o.utilities] : null,
     o.rent ? ['Czynsz', formatPrice(o.rent) + ' PLN/mies'] : null,
     o.deposit ? ['Kaucja', formatPrice(o.deposit) + ' PLN'] : null,
     o.availableFrom ? ['Dostępne od', formatDate(o.availableFrom)] : null,
-    o.pricePerM2 ? ['Cena za m²', formatPrice(o.pricePerM2) + ' PLN'] : null,
+    o.pricePerM2 ? ['Cena za m2', formatPrice(o.pricePerM2) + ' PLN'] : null,
     o.refNumber ? ['Nr ref.', o.refNumber] : null,
     o.source ? ['Źródło', o.source] : null,
   ].filter(Boolean);
@@ -1346,25 +1327,25 @@ function previewSingle(id) {
   ].filter(Boolean);
 
   content.innerHTML = `
-    <button class="btn btn-outline" onclick="renderPreview()" style="margin-bottom:16px">← Wróć do listy</button>
+    <button class="btn btn-outline" onclick="renderPreview()" style="margin-bottom:16px">Wróć do listy</button>
 
     <div class="preview-container">
       <div class="preview-card">
         <div class="preview-card-photo" style="height:400px">
-          ${mainImg ? `<img src="${escAttr(safeImgSrc(mainImg))}" alt="${escAttr(o.title || '')}" loading="lazy" onerror="this.style.display='none'" data-lb="${escAttr(safeImgSrc(mainImg))}">` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:1.2rem">Brak zdjecia</div>'}
+          ${mainImg ? `<img src="${escAttr(safeImgSrc(mainImg))}" alt="${escAttr(o.title || '')}" loading="lazy" onerror="this.style.display='none'" data-lb="${escAttr(safeImgSrc(mainImg))}">` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:1.2rem">Brak zdjęcia</div>'}
           <span class="preview-card-badge" ${o.type === 'wynajem' ? 'style="background:#555"' : ''}>${typeLabel}</span>
-          ${o.featured ? '<span class="preview-card-badge" style="left:auto;right:12px;background:var(--warning)">★ Wyróżniona</span>' : ''}
+          ${o.featured ? '<span class="preview-card-badge" style="left:auto;right:12px;background:var(--warning)">Wyróżniona</span>' : ''}
         </div>
         <div class="preview-card-body">
           <div class="preview-price" style="font-size:2rem">${fmtPrice} <span class="preview-price-sub">${escHtml(o.currency || 'PLN')}</span></div>
           <div class="preview-title" style="font-size:1.3rem">${escHtml(o.title)}</div>
           <div class="preview-meta" style="margin:16px 0">
-            <span class="preview-meta-item">📐 ${o.area} m²</span>
-            ${o.rooms ? `<span class="preview-meta-item">🚪 ${o.rooms} pok.</span>` : ''}
-            ${o.floor ? `<span class="preview-meta-item">🏢 ${o.floor}/${o.totalFloors || '?'} p.</span>` : ''}
-            ${o.views ? `<span class="preview-meta-item">👁 ${o.views} wyświetleń</span>` : ''}
+            <span class="preview-meta-item">${o.area} m2</span>
+            ${o.rooms ? `<span class="preview-meta-item">${o.rooms} pok.</span>` : ''}
+            ${o.floor ? `<span class="preview-meta-item">${o.floor}/${o.totalFloors || '?'} p.</span>` : ''}
+            ${o.views ? `<span class="preview-meta-item">${o.views} wyświetleń</span>` : ''}
           </div>
-          <div style="font-size:.9rem;color:var(--text-muted);margin-bottom:16px">📍 ${escHtml(o.address)}</div>
+          <div style="font-size:.9rem;color:var(--text-muted);margin-bottom:16px">${escHtml(o.address)}</div>
 
           ${o.desc ? `<div class="preview-desc" style="margin-bottom:20px;-webkit-line-clamp:unset">${escHtml(o.desc).replace(/\n/g, '<br>')}</div>` : ''}
 
@@ -1372,8 +1353,8 @@ function previewSingle(id) {
             <div style="margin-bottom:16px">
               <strong style="font-size:.85rem;display:block;margin-bottom:8px">Cechy:</strong>
               <div class="tags-wrap">
-                ${boolFeatures.map(f => `<span class="tag">✓ ${f}</span>`).join('')}
-                ${(o.features || []).map(f => `<span class="tag">✓ ${escHtml(f)}</span>`).join('')}
+                ${boolFeatures.map(f => `<span class="tag">${f}</span>`).join('')}
+                ${(o.features || []).map(f => `<span class="tag">${escHtml(f)}</span>`).join('')}
               </div>
             </div>
           ` : ''}
@@ -1431,7 +1412,6 @@ function previewSingle(id) {
   `;
 }
 
-// ─── Settings ────────────────────────────────────────────
 function renderSettings() {
   const content = $('#pageContent');
   content.innerHTML = `
@@ -1479,19 +1459,18 @@ function renderSettings() {
     </div>
   `;
 
-  // Change password
   $('#changePassBtn').addEventListener('click', async () => {
     const current = $('#sCurrent').value;
     const newPass = $('#sNew').value;
     const confirm = $('#sConfirm').value;
 
-    if (!current || !newPass) { toast('Wypelnij wszystkie pola.', 'error'); return; }
-    if (newPass !== confirm) { toast('Nowe hasla nie sa identyczne.', 'error'); return; }
-    if (newPass.length < 8) { toast('Nowe haslo musi miec min. 8 znakow.', 'error'); return; }
+    if (!current || !newPass) { toast('Wypełnij wszystkie pola.', 'error'); return; }
+    if (newPass !== confirm) { toast('Nowe hasła nie są identyczne.', 'error'); return; }
+    if (newPass.length < 8) { toast('Nowe hasło musi mieć min. 8 znaków.', 'error'); return; }
     if (!/[A-Za-z]/.test(newPass) || !/[0-9]/.test(newPass)) {
-      toast('Haslo musi zawierac litery i cyfry.', 'error'); return;
+      toast('Hasło musi zawierać litery i cyfry.', 'error'); return;
     }
-    if (newPass === current) { toast('Nowe haslo musi byc inne niz aktualne.', 'error'); return; }
+    if (newPass === current) { toast('Nowe hasło musi być inne niż aktualne.', 'error'); return; }
 
     try {
       await apiPost(EP().AUTH_CHANGE_PASS, { currentPassword: current, newPassword: newPass });
@@ -1504,18 +1483,16 @@ function renderSettings() {
     }
   });
 
-  // Health check
   fetch(API() + EP().HEALTH)
     .then(r => r.json())
     .then(data => {
-      $('#healthStatus').innerHTML = `<span style="color:var(--success)">✓ Backend online</span> — ${data.timestamp || ''}`;
+      $('#healthStatus').innerHTML = `<span style="color:var(--success)"> Backend online</span> - ${data.timestamp || ''}`;
     })
     .catch(() => {
-      $('#healthStatus').innerHTML = '<span style="color:var(--danger)">✗ Backend offline lub niedostępny</span>';
+      $('#healthStatus').innerHTML = '<span style="color:var(--danger)"> Backend offline lub niedostępny</span>';
     });
 }
 
-// ─── Lightbox ────────────────────────────────────────────
 function openLightbox(src) {
   if (!src) return;
   const safe = safeImgSrc(src);
@@ -1540,14 +1517,13 @@ document.addEventListener('click', e => {
   }
 });
 
-// ─── Init ────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   $('#loginBtn').addEventListener('click', doLogin);
   $('#loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
   $('#loginUser').addEventListener('keydown', e => { if (e.key === 'Enter') $('#loginPass').focus(); });
 
   $('#logoutBtn').addEventListener('click', () => {
-    if (state.formDirty && !confirm('Masz niezapisane zmiany. Wylogowac sie mimo to?')) return;
+    if (state.formDirty && !confirm('Masz niezapisane zmiany. Wylogować się mimo to?')) return;
     state.formDirty = false;
     doLogout();
   });
@@ -1596,7 +1572,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.token && Date.now() - state.lastActivity > SESSION_IDLE_LIMIT_MS) {
       state.formDirty = false;
       doLogout();
-      toast('Sesja wygasla z powodu bezczynnosci.', 'info');
+      toast('Sesja wygasła z powodu bezczynności.', 'info');
     }
   }, 60 * 1000);
 
