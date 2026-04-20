@@ -12,8 +12,12 @@ const state = {
   stats: null,
   currentPage: 'dashboard',
   editingOffer: null,
-  uploadedImages: [],  // images for new offer form
+  uploadedImages: [],
+  formDirty: false,
+  lastActivity: Date.now(),
 };
+
+const SESSION_IDLE_LIMIT_MS = 30 * 60 * 1000;
 
 // ─── Helpers ─────────────────────────────────────────────
 const $ = (sel) => document.querySelector(sel);
@@ -43,16 +47,58 @@ function jsonAuthHeaders() {
 }
 
 function formatPrice(n) {
-  return new Intl.NumberFormat('pl-PL').format(n || 0);
+  const v = Number(n);
+  return new Intl.NumberFormat('pl-PL').format(Number.isFinite(v) ? v : 0);
+}
+function formatNumber(n, frac) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return '0';
+  return new Intl.NumberFormat('pl-PL', {
+    minimumFractionDigits: frac || 0,
+    maximumFractionDigits: frac || 0,
+  }).format(v);
 }
 function formatDate(d) {
-  if (!d) return '–';
-  return new Date(d).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  if (!d) return '-';
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return '-';
+  return dt.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 function escHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str || '';
-  return div.innerHTML;
+  const s = String(str == null ? '' : str);
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+function escAttr(str) {
+  return escHtml(str);
+}
+function safeUrl(url) {
+  const s = String(url == null ? '' : url).trim();
+  if (!s) return '';
+  if (/^(?:https?:|mailto:|tel:|\/|#)/i.test(s)) return s;
+  return '';
+}
+function safeImgSrc(url) {
+  const s = String(url == null ? '' : url).trim();
+  if (!s) return '';
+  if (/^(?:https?:|\/)/i.test(s)) return s;
+  return '';
+}
+function clampNumber(v, min, max) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  if (typeof min === 'number' && n < min) return min;
+  if (typeof max === 'number' && n > max) return max;
+  return n;
+}
+function pricePerM2(price, area) {
+  const p = Number(price), a = Number(area);
+  if (!Number.isFinite(p) || !Number.isFinite(a) || a <= 0) return 0;
+  return Math.round(p / a);
 }
 
 // ─── Toast notifications ─────────────────────────────────
@@ -110,6 +156,27 @@ async function apiDelete(endpoint) {
     throw new Error(data.error || 'HTTP ' + res.status);
   }
   return res.json().catch(() => ({}));
+}
+
+const UPLOAD_LIMITS = Object.freeze({
+  MAX_FILE_SIZE: 10 * 1024 * 1024,
+  MAX_FILES: 20,
+  ACCEPT_MIME: /^image\/(jpeg|png|webp|avif|gif)$/i,
+  ACCEPT_EXT: /\.(jpe?g|png|webp|avif|gif)$/i,
+});
+
+function validateFile(file) {
+  if (!file) return 'Brak pliku.';
+  if (file.size > UPLOAD_LIMITS.MAX_FILE_SIZE) {
+    return file.name + ': plik jest za duzy (max 10 MB).';
+  }
+  if (file.type && !UPLOAD_LIMITS.ACCEPT_MIME.test(file.type)) {
+    return file.name + ': nieobslugiwany format. Dozwolone: JPG, PNG, WebP, AVIF.';
+  }
+  if (!file.type && !UPLOAD_LIMITS.ACCEPT_EXT.test(file.name)) {
+    return file.name + ': nieobslugiwany format pliku.';
+  }
+  return '';
 }
 
 async function uploadImage(file) {
@@ -213,28 +280,30 @@ function doLogout() {
 }
 
 // ─── Navigation ──────────────────────────────────────────
-function navigateTo(page) {
+function navigateTo(page, opts) {
+  opts = opts || {};
+  if (state.formDirty && !opts.force) {
+    if (!confirm('Masz niezapisane zmiany. Opuscic strone bez zapisywania?')) return;
+  }
+  state.formDirty = false;
   state.currentPage = page;
 
-  // Update sidebar
   $$('.sidebar-link').forEach(l => {
     l.classList.toggle('active', l.dataset.page === page);
   });
 
-  // Update title
   const titles = {
     dashboard: 'Dashboard',
     offers: 'Oferty',
-    add: 'Dodaj ofertę',
-    preview: 'Podgląd strony',
+    add: 'Dodaj oferte',
+    preview: 'Podglad strony',
     settings: 'Ustawienia',
   };
   $('#pageTitle').textContent = titles[page] || page;
 
-  // Close sidebar on mobile
-  $('#sidebar').classList.remove('open');
+  closeSidebar();
+  window.scrollTo(0, 0);
 
-  // Render page
   switch (page) {
     case 'dashboard': renderDashboard(); break;
     case 'offers': renderOffers(); break;
@@ -243,6 +312,19 @@ function navigateTo(page) {
     case 'settings': renderSettings(); break;
     default: renderDashboard();
   }
+}
+
+function openSidebar() {
+  $('#sidebar').classList.add('open');
+  const bd = $('#sidebarBackdrop');
+  if (bd) bd.classList.add('open');
+  document.body.classList.add('no-scroll');
+}
+function closeSidebar() {
+  $('#sidebar').classList.remove('open');
+  const bd = $('#sidebarBackdrop');
+  if (bd) bd.classList.remove('open');
+  document.body.classList.remove('no-scroll');
 }
 
 // ─── Dashboard ───────────────────────────────────────────
@@ -311,7 +393,7 @@ async function renderDashboard() {
               <tbody>
                 ${recentOffers.map(o => `
                   <tr>
-                    <td><img class="tbl-thumb" src="${getOfferThumb(o)}" alt="" onerror="this.style.display='none'" loading="lazy"></td>
+                    <td><img class="tbl-thumb" src="${escAttr(safeImgSrc(getOfferThumb(o)))}" alt="" onerror="this.style.display='none'" loading="lazy"></td>
                     <td><span class="tbl-title">${escHtml(o.title)}</span><br><span class="tbl-sub">${categoryLabel(o.category)}</span></td>
                     <td>${formatPrice(o.price)} ${escHtml(o.currency || 'PLN')}</td>
                     <td><span class="badge ${o.active !== false ? 'badge-active' : 'badge-inactive'}">${o.active !== false ? 'Aktywna' : 'Nieaktywna'}</span></td>
@@ -415,7 +497,7 @@ function renderOffersTable(searchTerm, filterType, filterStatus) {
             <tbody>
               ${offers.map(o => `
                 <tr>
-                  <td><img class="tbl-thumb" src="${getOfferThumb(o)}" alt="" onerror="this.style.display='none'" loading="lazy" onclick="openLightbox('${getOfferImg(o)}')"></td>
+                  <td><img class="tbl-thumb" src="${escAttr(safeImgSrc(getOfferThumb(o)))}" alt="" onerror="this.style.display='none'" loading="lazy" data-lb="${escAttr(safeImgSrc(getOfferImg(o)))}"></td>
                   <td><span class="tbl-title">${escHtml(o.title)}</span><br><span class="tbl-sub">${categoryLabel(o.category)}</span></td>
                   <td><span class="badge ${o.type === 'sprzedaz' ? 'badge-sale' : 'badge-rent'}">${o.type === 'sprzedaz' ? 'Sprzedaż' : 'Wynajem'}</span></td>
                   <td style="white-space:nowrap">${formatPrice(o.price)} ${escHtml(o.currency || 'PLN')}</td>
@@ -486,13 +568,13 @@ async function toggleFeatured(id) {
 }
 
 async function deleteOffer(id) {
-  if (!confirm('Czy na pewno chcesz usunąć tę ofertę? Tej operacji nie można cofnąć.')) return;
+  if (!confirm('Czy na pewno chcesz usunac te oferte? Tej operacji nie mozna cofnac.')) return;
   try {
     await apiDelete(EP().OFFERS + '/' + id);
-    toast('Oferta usunięta.', 'success');
+    toast('Oferta usunieta.', 'success');
     await renderOffers();
   } catch (err) {
-    toast('Błąd: ' + err.message, 'error');
+    toast('Blad: ' + err.message, 'error');
   }
 }
 
@@ -547,30 +629,36 @@ function renderAddForm(prefill) {
       <div class="form-row">
         <div class="form-field">
           <label>Cena *</label>
-          <input type="number" id="fPrice" placeholder="np. 350000" min="0" value="${o.price || ''}">
+          <input type="number" id="fPrice" placeholder="np. 350000" min="0" step="1" inputmode="numeric" value="${o.price || ''}">
         </div>
         <div class="form-field">
           <label>Waluta / okres</label>
-          <input type="text" id="fCurrency" placeholder="PLN lub PLN/mies" value="${escHtml(o.currency || 'PLN')}">
+          <input type="text" id="fCurrency" placeholder="PLN lub PLN/mies" maxlength="20" value="${escAttr(o.currency || 'PLN')}">
         </div>
         <div class="form-field">
-          <label>Powierzchnia (m²) *</label>
-          <input type="number" id="fArea" placeholder="np. 62" min="0" step="0.01" value="${o.area || ''}">
+          <label>Powierzchnia (m2) *</label>
+          <input type="number" id="fArea" placeholder="np. 62" min="0" step="0.01" inputmode="decimal" value="${o.area || ''}">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-field col-full">
+          <span class="hint">Cena za m2: <strong id="pricePerM2Out">-</strong></span>
         </div>
       </div>
 
       <div class="form-row">
         <div class="form-field">
           <label>Pokoje</label>
-          <input type="number" id="fRooms" placeholder="0" min="0" value="${o.rooms || ''}">
+          <input type="number" id="fRooms" placeholder="0" min="0" max="999" inputmode="numeric" value="${o.rooms || ''}">
         </div>
         <div class="form-field">
-          <label>Piętro</label>
-          <input type="number" id="fFloor" placeholder="np. 3" min="0" value="${o.floor || ''}">
+          <label>Pietro</label>
+          <input type="number" id="fFloor" placeholder="np. 3" min="0" max="999" inputmode="numeric" value="${o.floor || ''}">
         </div>
         <div class="form-field">
-          <label>Łącznie pięter</label>
-          <input type="number" id="fTotalFloors" placeholder="np. 7" min="0" value="${o.totalFloors || ''}">
+          <label>Lacznie pieter</label>
+          <input type="number" id="fTotalFloors" placeholder="np. 7" min="0" max="999" inputmode="numeric" value="${o.totalFloors || ''}">
         </div>
       </div>
     </div>
@@ -815,11 +903,12 @@ function renderAddForm(prefill) {
     </div>
   `;
 
-  // Bind upload events
   bindUploadZone();
   renderImagesPreview();
+  bindLiveCalculations();
+  bindFormDirtyTracking();
+  state.formDirty = false;
 
-  // Submit
   $('#submitOfferBtn').addEventListener('click', () => {
     if (prefill) {
       submitEditOffer(prefill._id || prefill.id);
@@ -847,31 +936,56 @@ function bindUploadZone() {
 }
 
 async function handleFiles(files) {
+  const list = Array.from(files || []);
+  if (!list.length) return;
+
+  const remaining = UPLOAD_LIMITS.MAX_FILES - state.uploadedImages.length;
+  if (remaining <= 0) {
+    toast('Osiagnieto limit ' + UPLOAD_LIMITS.MAX_FILES + ' zdjec na oferte.', 'error');
+    return;
+  }
+  const accepted = [];
+  for (const f of list) {
+    if (accepted.length >= remaining) {
+      toast('Pominieto czesc plikow - limit ' + UPLOAD_LIMITS.MAX_FILES + ' zdjec.', 'info');
+      break;
+    }
+    const err = validateFile(f);
+    if (err) { toast(err, 'error'); continue; }
+    accepted.push(f);
+  }
+  if (!accepted.length) return;
+
   const progress = $('#uploadProgress');
   const fill = $('#progressFill');
   const status = $('#uploadStatus');
 
-  progress.style.display = 'block';
-  fill.style.width = '0%';
-  status.textContent = `Przesyłanie 0/${files.length}...`;
+  if (progress) progress.style.display = 'block';
+  if (fill) fill.style.width = '0%';
+  if (status) status.textContent = 'Przesylanie 0/' + accepted.length + '...';
 
-  let done = 0;
-  for (const file of files) {
+  let done = 0, ok = 0;
+  for (const file of accepted) {
     try {
-      status.textContent = `Przesyłanie ${done + 1}/${files.length}: ${file.name}`;
+      if (status) status.textContent = 'Przesylanie ' + (done + 1) + '/' + accepted.length + ': ' + file.name;
       const img = await uploadImage(file);
-      state.uploadedImages.push(img);
-      done++;
-      fill.style.width = Math.round((done / files.length) * 100) + '%';
+      if (img) {
+        state.uploadedImages.push(img);
+        ok++;
+      }
     } catch (err) {
-      toast('Błąd przesyłania: ' + (err.message || file.name), 'error');
-      done++;
+      toast('Blad przesylania: ' + (err.message || file.name), 'error');
     }
+    done++;
+    if (fill) fill.style.width = Math.round((done / accepted.length) * 100) + '%';
   }
 
-  status.textContent = `Przesłano ${done}/${files.length} zdjęć.`;
-  setTimeout(() => { progress.style.display = 'none'; }, 2000);
+  if (status) status.textContent = 'Przeslano ' + ok + '/' + accepted.length + ' zdjec.';
+  setTimeout(() => { if (progress) progress.style.display = 'none'; }, 2000);
+  const input = $('#fileInput');
+  if (input) input.value = '';
   renderImagesPreview();
+  markFormDirty();
 }
 
 function renderImagesPreview() {
@@ -883,18 +997,52 @@ function renderImagesPreview() {
     return;
   }
 
-  wrap.innerHTML = state.uploadedImages.map((img, idx) => `
-    <div class="preview-item">
-      <img src="${API() + (img.thumbWebp || img.thumb || img.webp || img.original)}" alt="${escHtml(img.alt)}" onclick="openLightbox('${API() + (img.webp || img.original)}')" loading="lazy">
-      <button class="preview-remove" onclick="removeUploadedImage(${idx})">✕</button>
-      ${idx === 0 ? '<span class="preview-main-badge">Główne</span>' : ''}
-    </div>
-  `).join('');
+  wrap.innerHTML = state.uploadedImages.map((img, idx) => {
+    const thumb = safeImgSrc(API() + (img.thumbWebp || img.thumb || img.webp || img.original || ''));
+    const full = safeImgSrc(API() + (img.webp || img.original || ''));
+    const alt = escAttr(img.alt || '');
+    const last = state.uploadedImages.length - 1;
+    return '' +
+      '<div class="preview-item">' +
+        '<img src="' + escAttr(thumb) + '" alt="' + alt + '" data-full="' + escAttr(full) + '" loading="lazy">' +
+        '<div class="preview-actions">' +
+          (idx > 0 ? '<button type="button" class="preview-btn" data-act="up" data-idx="' + idx + '" aria-label="Przesun w lewo">&#8592;</button>' : '') +
+          (idx < last ? '<button type="button" class="preview-btn" data-act="down" data-idx="' + idx + '" aria-label="Przesun w prawo">&#8594;</button>' : '') +
+          (idx > 0 ? '<button type="button" class="preview-btn" data-act="main" data-idx="' + idx + '" aria-label="Ustaw jako glowne">&#9733;</button>' : '') +
+          '<button type="button" class="preview-remove" data-act="remove" data-idx="' + idx + '" aria-label="Usun zdjecie">&#10005;</button>' +
+        '</div>' +
+        (idx === 0 ? '<span class="preview-main-badge">Glowne</span>' : '') +
+      '</div>';
+  }).join('');
+
+  wrap.querySelectorAll('.preview-item img').forEach(img => {
+    img.addEventListener('click', () => openLightbox(img.dataset.full));
+  });
+  wrap.querySelectorAll('button[data-act]').forEach(b => {
+    b.addEventListener('click', () => {
+      const idx = parseInt(b.dataset.idx, 10);
+      const act = b.dataset.act;
+      if (act === 'remove') removeUploadedImage(idx);
+      else if (act === 'up') moveUploadedImage(idx, idx - 1);
+      else if (act === 'down') moveUploadedImage(idx, idx + 1);
+      else if (act === 'main') moveUploadedImage(idx, 0);
+    });
+  });
 }
 
 function removeUploadedImage(idx) {
   state.uploadedImages.splice(idx, 1);
   renderImagesPreview();
+  markFormDirty();
+}
+
+function moveUploadedImage(from, to) {
+  if (from < 0 || from >= state.uploadedImages.length) return;
+  if (to < 0 || to >= state.uploadedImages.length) return;
+  const [item] = state.uploadedImages.splice(from, 1);
+  state.uploadedImages.splice(to, 0, item);
+  renderImagesPreview();
+  markFormDirty();
 }
 
 function gatherFormData() {
@@ -903,23 +1051,30 @@ function gatherFormData() {
     .map(f => f.trim())
     .filter(Boolean);
 
+  const price = clampNumber($('#fPrice').value, 0) || 0;
+  const area = clampNumber($('#fArea').value, 0) || 0;
+  const rooms = clampNumber($('#fRooms').value, 0, 999);
+  const floor = clampNumber($('#fFloor').value, 0, 999);
+  const totalFloors = clampNumber($('#fTotalFloors').value, 0, 999);
+  const yearBuilt = clampNumber($('#fYearBuilt').value, 1500, 2100);
+
   return {
     type: $('#fType').value,
     category: $('#fCategory').value,
     active: $('#fActive').value === 'true',
     title: $('#fTitle').value.trim(),
     refNumber: $('#fRefNumber').value.trim(),
-    price: parseFloat($('#fPrice').value) || 0,
+    price,
     currency: $('#fCurrency').value.trim() || 'PLN',
-    area: parseFloat($('#fArea').value) || 0,
-    rooms: parseInt($('#fRooms').value) || 0,
-    floor: parseInt($('#fFloor').value) || 0,
-    totalFloors: parseInt($('#fTotalFloors').value) || 0,
+    area,
+    rooms: rooms == null ? 0 : rooms,
+    floor: floor == null ? 0 : floor,
+    totalFloors: totalFloors == null ? 0 : totalFloors,
     address: $('#fAddress').value.trim(),
     city: $('#fCity').value.trim(),
     district: $('#fDistrict').value.trim(),
     street: $('#fStreet').value.trim(),
-    yearBuilt: parseInt($('#fYearBuilt').value) || null,
+    yearBuilt: yearBuilt,
     buildingType: $('#fBuildingType').value,
     buildingMaterial: $('#fBuildingMaterial').value,
     heatingType: $('#fHeatingType').value,
@@ -933,11 +1088,11 @@ function gatherFormData() {
     furnished: $('#fFurnished').checked,
     fencing: $('#fFencing').checked,
     featured: $('#fFeatured').checked,
-    plotArea: parseFloat($('#fPlotArea').value) || 0,
+    plotArea: clampNumber($('#fPlotArea').value, 0) || 0,
     plotType: $('#fPlotType').value,
     utilities: $('#fUtilities').value.trim(),
-    rent: parseFloat($('#fRent').value) || 0,
-    deposit: parseFloat($('#fDeposit').value) || 0,
+    rent: clampNumber($('#fRent').value, 0) || 0,
+    deposit: clampNumber($('#fDeposit').value, 0) || 0,
     availableFrom: $('#fAvailableFrom').value || null,
     agentName: $('#fAgentName').value.trim(),
     agentPhone: $('#fAgentPhone').value.trim(),
@@ -954,11 +1109,84 @@ function gatherFormData() {
   };
 }
 
+function markInvalid(id, on) {
+  const el = $('#' + id);
+  if (el) el.classList.toggle('is-invalid', !!on);
+}
+function clearInvalid() {
+  $$('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+}
+
+function validateOffer(data) {
+  const errors = [];
+  clearInvalid();
+
+  if (!data.title) { errors.push('Wpisz tytul.'); markInvalid('fTitle', true); }
+  else if (data.title.length > 200) { errors.push('Tytul moze miec max 200 znakow.'); markInvalid('fTitle', true); }
+
+  if (!(data.price > 0)) { errors.push('Cena musi byc wieksza od zera.'); markInvalid('fPrice', true); }
+  if (!(data.area > 0)) { errors.push('Powierzchnia musi byc wieksza od zera.'); markInvalid('fArea', true); }
+  if (!data.address) { errors.push('Wpisz adres.'); markInvalid('fAddress', true); }
+
+  if (data.totalFloors && data.floor && data.floor > data.totalFloors) {
+    errors.push('Pietro nie moze byc wieksze niz laczna liczba pieter.');
+    markInvalid('fFloor', true);
+    markInvalid('fTotalFloors', true);
+  }
+
+  if (data.agentEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.agentEmail)) {
+    errors.push('Niepoprawny adres email agenta.');
+    markInvalid('fAgentEmail', true);
+  }
+
+  const urlOk = (u) => !u || /^https?:\/\//i.test(u);
+  if (!urlOk(data.videoUrl)) { errors.push('URL filmu musi zaczynac sie od http(s)://'); markInvalid('fVideoUrl', true); }
+  if (!urlOk(data.virtualTourUrl)) { errors.push('URL spaceru musi zaczynac sie od http(s)://'); markInvalid('fVirtualTourUrl', true); }
+  if (!urlOk(data.sourceUrl)) { errors.push('URL zrodla musi zaczynac sie od http(s)://'); markInvalid('fSourceUrl', true); }
+  if (data.img && !urlOk(data.img)) { errors.push('URL zdjecia musi zaczynac sie od http(s)://'); markInvalid('fImgUrl', true); }
+
+  if (data.shortDesc && data.shortDesc.length > 300) {
+    errors.push('Krotki opis moze miec max 300 znakow.');
+    markInvalid('fShortDesc', true);
+  }
+
+  return errors;
+}
+
+function markFormDirty() { state.formDirty = true; }
+
+function bindFormDirtyTracking() {
+  const root = $('#pageContent');
+  if (!root) return;
+  root.querySelectorAll('input, select, textarea').forEach(el => {
+    el.addEventListener('input', markFormDirty, { once: false });
+    el.addEventListener('change', markFormDirty, { once: false });
+  });
+}
+
+function bindLiveCalculations() {
+  const update = () => {
+    const out = $('#pricePerM2Out');
+    if (!out) return;
+    const price = parseFloat($('#fPrice').value) || 0;
+    const area = parseFloat($('#fArea').value) || 0;
+    const ppm = pricePerM2(price, area);
+    out.textContent = ppm > 0 ? formatPrice(ppm) + ' PLN/m2' : '-';
+  };
+  ['fPrice', 'fArea'].forEach(id => {
+    const el = $('#' + id);
+    if (el) el.addEventListener('input', update);
+  });
+  update();
+}
+
 async function submitNewOffer() {
   const data = gatherFormData();
-
-  if (!data.title || !data.price || !data.area || !data.address) {
-    toast('Wypełnij wymagane pola: Tytuł, Cena, Powierzchnia, Adres.', 'error');
+  const errs = validateOffer(data);
+  if (errs.length) {
+    toast(errs[0], 'error');
+    const first = $('.is-invalid');
+    if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
 
@@ -968,22 +1196,25 @@ async function submitNewOffer() {
 
   try {
     await apiPost(EP().OFFERS, data);
-    toast('Oferta dodana pomyślnie!', 'success');
+    state.formDirty = false;
+    toast('Oferta dodana pomyslnie!', 'success');
     state.uploadedImages = [];
     navigateTo('offers');
   } catch (err) {
-    toast('Błąd: ' + err.message, 'error');
+    toast('Blad: ' + err.message, 'error');
   }
 
-  btn.textContent = 'Dodaj ofertę';
+  btn.textContent = 'Dodaj oferte';
   btn.disabled = false;
 }
 
 async function submitEditOffer(id) {
   const data = gatherFormData();
-
-  if (!data.title || !data.price || !data.area || !data.address) {
-    toast('Wypełnij wymagane pola: Tytuł, Cena, Powierzchnia, Adres.', 'error');
+  const errs = validateOffer(data);
+  if (errs.length) {
+    toast(errs[0], 'error');
+    const first = $('.is-invalid');
+    if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
 
@@ -993,11 +1224,12 @@ async function submitEditOffer(id) {
 
   try {
     await apiPatch(EP().OFFERS + '/' + id, data);
+    state.formDirty = false;
     toast('Oferta zaktualizowana!', 'success');
     state.uploadedImages = [];
     navigateTo('offers');
   } catch (err) {
-    toast('Błąd: ' + err.message, 'error');
+    toast('Blad: ' + err.message, 'error');
   }
 
   btn.textContent = 'Zapisz zmiany';
@@ -1050,7 +1282,7 @@ function renderPreviewCard(o) {
   return `
     <div class="preview-card" onclick="previewSingle('${o._id || o.id}')" style="cursor:pointer">
       <div class="preview-card-photo">
-        ${imgSrc ? `<img src="${imgSrc}" alt="${escHtml(o.title)}" loading="lazy" onerror="this.style.display='none'">` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)">Brak zdjęcia</div>'}
+        ${imgSrc ? `<img src="${escAttr(safeImgSrc(imgSrc))}" alt="${escAttr(o.title || '')}" loading="lazy" onerror="this.style.display='none'">` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)">Brak zdjecia</div>'}
         <span class="preview-card-badge" ${o.type === 'wynajem' ? 'style="background:#555"' : ''}>${typeLabel}</span>
         ${o.featured ? '<span class="preview-card-badge" style="left:auto;right:12px;background:var(--warning)">★ Wyróżniona</span>' : ''}
       </div>
@@ -1119,7 +1351,7 @@ function previewSingle(id) {
     <div class="preview-container">
       <div class="preview-card">
         <div class="preview-card-photo" style="height:400px">
-          ${mainImg ? `<img src="${mainImg}" alt="${escHtml(o.title)}" loading="lazy" onerror="this.style.display='none'" onclick="openLightbox('${mainImg}')">` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:1.2rem">Brak zdjęcia</div>'}
+          ${mainImg ? `<img src="${escAttr(safeImgSrc(mainImg))}" alt="${escAttr(o.title || '')}" loading="lazy" onerror="this.style.display='none'" data-lb="${escAttr(safeImgSrc(mainImg))}">` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:1.2rem">Brak zdjecia</div>'}
           <span class="preview-card-badge" ${o.type === 'wynajem' ? 'style="background:#555"' : ''}>${typeLabel}</span>
           ${o.featured ? '<span class="preview-card-badge" style="left:auto;right:12px;background:var(--warning)">★ Wyróżniona</span>' : ''}
         </div>
@@ -1161,30 +1393,30 @@ function previewSingle(id) {
             <div style="margin-top:24px">
               <strong style="font-size:.85rem;display:block;margin-bottom:8px">Galeria (${allImages.length} zdjęć):</strong>
               <div class="preview-gallery">
-                ${allImages.map(src => `<img src="${src}" alt="" loading="lazy" onclick="openLightbox('${src}')">`).join('')}
+                ${allImages.map(src => `<img src="${escAttr(safeImgSrc(src))}" alt="" loading="lazy" data-lb="${escAttr(safeImgSrc(src))}">`).join('')}
               </div>
             </div>
           ` : ''}
 
-          ${o.videoUrl ? `
+          ${safeUrl(o.videoUrl) ? `
             <div style="margin-top:20px">
               <strong style="font-size:.85rem;display:block;margin-bottom:8px">Film:</strong>
-              <a href="${escHtml(o.videoUrl)}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">🎬 Obejrzyj film</a>
+              <a href="${escAttr(safeUrl(o.videoUrl))}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">Obejrzyj film</a>
             </div>
           ` : ''}
 
-          ${o.virtualTourUrl ? `
+          ${safeUrl(o.virtualTourUrl) ? `
             <div style="margin-top:12px">
-              <a href="${escHtml(o.virtualTourUrl)}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">🔄 Spacer wirtualny 3D</a>
+              <a href="${escAttr(safeUrl(o.virtualTourUrl))}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">Spacer wirtualny 3D</a>
             </div>
           ` : ''}
 
           ${o.agentName || o.agentPhone || o.agentEmail ? `
             <div style="margin-top:24px;padding:16px;background:var(--bg);border-radius:var(--radius);border:1px solid var(--border-soft)">
               <strong style="font-size:.85rem;display:block;margin-bottom:8px">Kontakt:</strong>
-              ${o.agentName ? `<div style="font-size:.88rem;margin-bottom:4px">👤 ${escHtml(o.agentName)}</div>` : ''}
-              ${o.agentPhone ? `<div style="font-size:.88rem;margin-bottom:4px">📞 <a href="tel:${escHtml(o.agentPhone)}">${escHtml(o.agentPhone)}</a></div>` : ''}
-              ${o.agentEmail ? `<div style="font-size:.88rem">📧 <a href="mailto:${escHtml(o.agentEmail)}">${escHtml(o.agentEmail)}</a></div>` : ''}
+              ${o.agentName ? `<div style="font-size:.88rem;margin-bottom:4px">${escHtml(o.agentName)}</div>` : ''}
+              ${o.agentPhone ? `<div style="font-size:.88rem;margin-bottom:4px"><a href="tel:${escAttr(o.agentPhone.replace(/[^+\d]/g, ''))}">${escHtml(o.agentPhone)}</a></div>` : ''}
+              ${o.agentEmail ? `<div style="font-size:.88rem"><a href="mailto:${escAttr(o.agentEmail)}">${escHtml(o.agentEmail)}</a></div>` : ''}
             </div>
           ` : ''}
         </div>
@@ -1253,9 +1485,13 @@ function renderSettings() {
     const newPass = $('#sNew').value;
     const confirm = $('#sConfirm').value;
 
-    if (!current || !newPass) { toast('Wypełnij wszystkie pola.', 'error'); return; }
-    if (newPass !== confirm) { toast('Nowe hasła nie są identyczne.', 'error'); return; }
-    if (newPass.length < 6) { toast('Nowe hasło musi mieć min. 6 znaków.', 'error'); return; }
+    if (!current || !newPass) { toast('Wypelnij wszystkie pola.', 'error'); return; }
+    if (newPass !== confirm) { toast('Nowe hasla nie sa identyczne.', 'error'); return; }
+    if (newPass.length < 8) { toast('Nowe haslo musi miec min. 8 znakow.', 'error'); return; }
+    if (!/[A-Za-z]/.test(newPass) || !/[0-9]/.test(newPass)) {
+      toast('Haslo musi zawierac litery i cyfry.', 'error'); return;
+    }
+    if (newPass === current) { toast('Nowe haslo musi byc inne niz aktualne.', 'error'); return; }
 
     try {
       await apiPost(EP().AUTH_CHANGE_PASS, { currentPassword: current, newPassword: newPass });
@@ -1282,27 +1518,40 @@ function renderSettings() {
 // ─── Lightbox ────────────────────────────────────────────
 function openLightbox(src) {
   if (!src) return;
+  const safe = safeImgSrc(src);
+  if (!safe) return;
   const lb = $('#lightbox');
-  $('#lightboxImg').src = src;
+  $('#lightboxImg').src = safe;
   lb.classList.add('open');
+  document.body.classList.add('no-scroll');
 }
 function closeLightbox() {
   const lb = $('#lightbox');
   lb.classList.remove('open');
   $('#lightboxImg').src = '';
+  document.body.classList.remove('no-scroll');
 }
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-lb]');
+  if (t) {
+    e.preventDefault();
+    openLightbox(t.getAttribute('data-lb'));
+  }
+});
 
 // ─── Init ────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  // Login
   $('#loginBtn').addEventListener('click', doLogin);
   $('#loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
   $('#loginUser').addEventListener('keydown', e => { if (e.key === 'Enter') $('#loginPass').focus(); });
 
-  // Logout
-  $('#logoutBtn').addEventListener('click', doLogout);
+  $('#logoutBtn').addEventListener('click', () => {
+    if (state.formDirty && !confirm('Masz niezapisane zmiany. Wylogowac sie mimo to?')) return;
+    state.formDirty = false;
+    doLogout();
+  });
 
-  // Navigation
   $$('.sidebar-link').forEach(link => {
     link.addEventListener('click', e => {
       e.preventDefault();
@@ -1310,34 +1559,46 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Mobile sidebar
-  $('#hamburgerBtn').addEventListener('click', () => {
-    $('#sidebar').classList.toggle('open');
-  });
-  $('#sidebarClose').addEventListener('click', () => {
-    $('#sidebar').classList.remove('open');
-  });
+  $('#hamburgerBtn').addEventListener('click', openSidebar);
+  $('#sidebarClose').addEventListener('click', closeSidebar);
+  const bd = $('#sidebarBackdrop');
+  if (bd) bd.addEventListener('click', closeSidebar);
 
-  // Lightbox
   $('#lightboxClose').addEventListener('click', closeLightbox);
   $('#lightbox').addEventListener('click', e => {
     if (e.target === $('#lightbox')) closeLightbox();
   });
 
-  // Edit modal close
-  $('#editModalClose').addEventListener('click', () => {
-    $('#editModal').classList.remove('open');
+  const emc = $('#editModalClose');
+  if (emc) emc.addEventListener('click', () => {
+    const m = $('#editModal'); if (m) m.classList.remove('open');
   });
 
-  // Escape key
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
       closeLightbox();
-      $('#editModal').classList.remove('open');
-      $('#sidebar').classList.remove('open');
+      const m = $('#editModal'); if (m) m.classList.remove('open');
+      closeSidebar();
     }
   });
 
-  // Try to restore session
+  window.addEventListener('beforeunload', e => {
+    if (state.formDirty) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+
+  ['click', 'keydown', 'touchstart', 'mousemove'].forEach(ev => {
+    document.addEventListener(ev, () => { state.lastActivity = Date.now(); }, { passive: true });
+  });
+  setInterval(() => {
+    if (state.token && Date.now() - state.lastActivity > SESSION_IDLE_LIMIT_MS) {
+      state.formDirty = false;
+      doLogout();
+      toast('Sesja wygasla z powodu bezczynnosci.', 'info');
+    }
+  }, 60 * 1000);
+
   verifySession();
 });
