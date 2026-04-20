@@ -837,7 +837,7 @@ function renderAddForm(prefill) {
       <div class="form-row">
         <div class="form-field">
           <label>URL do filmu (YouTube/Vimeo)</label>
-          <input type="url" id="fVideoUrl" placeholder="https:
+          <input type="url" id="fVideoUrl" placeholder="https://youtube.com/..." value="${escHtml(o.videoUrl || '')}">
         </div>
         <div class="form-field">
           <label>Spacer wirtualny 3D (URL)</label>
