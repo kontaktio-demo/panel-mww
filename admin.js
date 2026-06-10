@@ -183,18 +183,6 @@ async function uploadImage(file) {
   return data.image;
 }
 
-async function uploadMultipleImages(files) {
-  const fd = new FormData();
-  for (const f of files) fd.append('images', f);
-  const res = await fetch(API() + EP().IMAGE_UPLOAD_MULTI, {
-    method: 'POST', headers: authHeaders(), body: fd,
-  });
-  if (res.status === 401) { clearToken(); showLogin(); throw new Error('Unauthorized'); }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Upload failed');
-  return data.images;
-}
-
 function showLogin() {
   $('#loginScreen').style.display = 'flex';
   $('#app').style.display = 'none';
@@ -257,7 +245,11 @@ async function verifySession() {
     } else {
       clearToken();
     }
-  } catch {
+  } catch (err) {
+    if (err && err.message !== 'Unauthorized') {
+      const errEl = $('#loginError');
+      if (errEl) errEl.textContent = 'Nie można połączyć się z serwerem. Odśwież stronę.';
+    }
   }
 }
 
@@ -360,8 +352,8 @@ async function renderDashboard() {
         <div class="stats-grid" style="margin-bottom:0">
           ${Object.entries(s.categories || {}).map(([k, v]) => `
             <div class="stat-card">
-              <div class="stat-number" style="font-size:1.3rem">${v}</div>
-              <div class="stat-label">${categoryLabel(k)}</div>
+              <div class="stat-number" style="font-size:1.3rem">${Number(v) || 0}</div>
+              <div class="stat-label">${escHtml(categoryLabel(k))}</div>
             </div>
           `).join('') || '<p style="color:var(--text-muted);font-size:.85rem">Brak ofert</p>'}
         </div>
@@ -382,7 +374,7 @@ async function renderDashboard() {
                 ${recentOffers.map(o => `
                   <tr>
                     <td><img class="tbl-thumb" src="${escAttr(safeImgSrc(getOfferThumb(o)))}" alt="" onerror="this.style.display='none'" loading="lazy"></td>
-                    <td><span class="tbl-title">${escHtml(o.title)}</span><br><span class="tbl-sub">${categoryLabel(o.category)}</span></td>
+                    <td><span class="tbl-title">${escHtml(o.title)}</span><br><span class="tbl-sub">${escHtml(categoryLabel(o.category))}</span></td>
                     <td>${formatPrice(o.price)} ${escHtml(o.currency || 'PLN')}</td>
                     <td><span class="badge ${o.active !== false ? 'badge-active' : 'badge-inactive'}">${o.active !== false ? 'Aktywna' : 'Nieaktywna'}</span></td>
                     <td style="white-space:nowrap">${formatDate(o.createdAt)}</td>
@@ -408,12 +400,18 @@ function categoryLabel(cat) {
   return map[cat] || cat || '-';
 }
 
+function resolveLegacyImg(src) {
+  const s = String(src == null ? '' : src);
+  if (/^\/uploads\//.test(s)) return API() + s;
+  return s;
+}
+
 function getOfferThumb(offer) {
   if (offer.images && offer.images.length > 0) {
     const img = offer.images[0];
     return API() + (img.thumbWebp || img.thumb || img.webp || img.original || '');
   }
-  return offer.img || '';
+  return resolveLegacyImg(offer.img);
 }
 
 function getOfferImg(offer) {
@@ -421,7 +419,7 @@ function getOfferImg(offer) {
     const img = offer.images[0];
     return API() + (img.webp || img.avif || img.original || '');
   }
-  return offer.img || '';
+  return resolveLegacyImg(offer.img);
 }
 
 async function renderOffers() {
@@ -484,7 +482,7 @@ function renderOffersTable(searchTerm, filterType, filterStatus) {
               ${offers.map(o => `
                 <tr>
                   <td><img class="tbl-thumb" src="${escAttr(safeImgSrc(getOfferThumb(o)))}" alt="" onerror="this.style.display='none'" loading="lazy" data-lb="${escAttr(safeImgSrc(getOfferImg(o)))}"></td>
-                  <td><span class="tbl-title">${escHtml(o.title)}</span><br><span class="tbl-sub">${categoryLabel(o.category)}</span></td>
+                  <td><span class="tbl-title">${escHtml(o.title)}</span><br><span class="tbl-sub">${escHtml(categoryLabel(o.category))}</span></td>
                   <td><span class="badge ${o.type === 'sprzedaz' ? 'badge-sale' : 'badge-rent'}">${o.type === 'sprzedaz' ? 'Sprzedaż' : 'Wynajem'}</span></td>
                   <td style="white-space:nowrap">${formatPrice(o.price)} ${escHtml(o.currency || 'PLN')}</td>
                   <td>${o.area || 0} m2</td>
@@ -858,6 +856,24 @@ function renderAddForm(prefill) {
 
     <div class="card">
       <div class="card-header">
+        <div class="card-title">SEO (opcjonalne)</div>
+      </div>
+      <div class="form-row">
+        <div class="form-field col-full">
+          <label>Tytuł SEO (maks. 200 znaków)</label>
+          <input type="text" id="fMetaTitle" maxlength="200" placeholder="Własny tytuł w Google - puste pole = tytuł oferty" value="${escHtml(o.metaTitle || '')}">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field col-full">
+          <label>Opis SEO (maks. 500 znaków)</label>
+          <textarea id="fMetaDescription" rows="2" maxlength="500" placeholder="Własny opis w Google - puste pole = opis generowany automatycznie">${escHtml(o.metaDescription || '')}</textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
         <div class="card-title">Zdjęcia</div>
       </div>
       <div class="upload-zone" id="uploadZone">
@@ -1087,6 +1103,8 @@ function gatherFormData() {
     virtualTourUrl: $('#fVirtualTourUrl').value.trim(),
     source: $('#fSource').value.trim(),
     sourceUrl: $('#fSourceUrl').value.trim(),
+    metaTitle: $('#fMetaTitle').value.trim(),
+    metaDescription: $('#fMetaDescription').value.trim(),
     images: state.uploadedImages,
     img: $('#fImgUrl').value.trim(),
   };
@@ -1466,9 +1484,10 @@ function renderSettings() {
 
     if (!current || !newPass) { toast('Wypełnij wszystkie pola.', 'error'); return; }
     if (newPass !== confirm) { toast('Nowe hasła nie są identyczne.', 'error'); return; }
-    if (newPass.length < 8) { toast('Nowe hasło musi mieć min. 8 znaków.', 'error'); return; }
-    if (!/[A-Za-z]/.test(newPass) || !/[0-9]/.test(newPass)) {
-      toast('Hasło musi zawierać litery i cyfry.', 'error'); return;
+    if (newPass.length < 10) { toast('Nowe hasło musi mieć min. 10 znaków.', 'error'); return; }
+    if (newPass.length > 128) { toast('Hasło może mieć max 128 znaków.', 'error'); return; }
+    if (!/[a-z]/.test(newPass) || !/[A-Z]/.test(newPass) || !/[0-9]/.test(newPass)) {
+      toast('Hasło musi zawierać małe i wielkie litery oraz cyfrę.', 'error'); return;
     }
     if (newPass === current) { toast('Nowe hasło musi być inne niż aktualne.', 'error'); return; }
 
@@ -1545,15 +1564,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target === $('#lightbox')) closeLightbox();
   });
 
-  const emc = $('#editModalClose');
-  if (emc) emc.addEventListener('click', () => {
-    const m = $('#editModal'); if (m) m.classList.remove('open');
-  });
-
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
       closeLightbox();
-      const m = $('#editModal'); if (m) m.classList.remove('open');
       closeSidebar();
     }
   });
