@@ -516,8 +516,15 @@ function renderOffersTable(searchTerm, filterType, filterStatus) {
   if (searchInput) {
     searchInput.addEventListener('input', () => {
       clearTimeout(debounce);
+      const caret = searchInput.selectionStart;
       debounce = setTimeout(() => {
         renderOffersTable(searchInput.value, typeFilter.value, statusFilter.value);
+        const el = $('#offerSearch');
+        if (el) {
+          el.focus();
+          const pos = caret == null ? el.value.length : caret;
+          try { el.setSelectionRange(pos, pos); } catch (e) {}
+        }
       }, 300);
     });
   }
@@ -1242,12 +1249,16 @@ async function openEditModal(id) {
   if (!offer) { toast('Nie znaleziono oferty.', 'error'); return; }
 
   state.currentPage = 'add';
+  $$('.sidebar-link').forEach(l => l.classList.toggle('active', l.dataset.page === 'add'));
   $('#pageTitle').textContent = 'Edytuj ofertę';
   renderAddForm(offer);
 }
 
 async function renderPreview() {
   const content = $('#pageContent');
+  state.currentPage = 'preview';
+  $$('.sidebar-link').forEach(l => l.classList.toggle('active', l.dataset.page === 'preview'));
+  $('#pageTitle').textContent = 'Podgląd strony';
 
   if (state.offers.length === 0) {
     try { state.offers = await apiGet(EP().OFFERS_ALL); } catch {}
@@ -1306,6 +1317,7 @@ function previewSingle(id) {
 
   const content = $('#pageContent');
   state.currentPage = 'preview';
+  $$('.sidebar-link').forEach(l => l.classList.toggle('active', l.dataset.page === 'preview'));
   $('#pageTitle').textContent = 'Podgląd oferty';
 
   const fmtPrice = formatPrice(o.price);
