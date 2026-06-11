@@ -70,6 +70,19 @@ function escHtml(str) {
 function escAttr(str) {
   return escHtml(str);
 }
+
+function wireFormLabels(root) {
+  (root || document).querySelectorAll('.form-field').forEach(ff => {
+    const ctrl = ff.querySelector('input[id], select[id], textarea[id]');
+    if (!ctrl) return;
+    const label = ff.querySelector('label');
+    if (label && !label.htmlFor) label.htmlFor = ctrl.id;
+    if (!label && !ctrl.getAttribute('aria-label')) {
+      const hint = ff.querySelector('.hint');
+      if (hint) ctrl.setAttribute('aria-label', hint.textContent.trim().slice(0, 80));
+    }
+  });
+}
 function safeUrl(url) {
   const s = String(url == null ? '' : url).trim();
   if (!s) return '';
@@ -347,7 +360,7 @@ async function renderDashboard() {
 
       <div class="card">
         <div class="card-header">
-          <div class="card-title">Kategorie ofert</div>
+          <h2 class="card-title">Kategorie ofert</h2>
         </div>
         <div class="stats-grid" style="margin-bottom:0">
           ${Object.entries(s.categories || {}).map(([k, v]) => `
@@ -361,7 +374,7 @@ async function renderDashboard() {
 
       <div class="card">
         <div class="card-header">
-          <div class="card-title">Ostatnio dodane</div>
+          <h2 class="card-title">Ostatnio dodane</h2>
           <button class="btn btn-outline btn-sm" onclick="navigateTo('offers')">Zobacz wszystkie</button>
         </div>
         ${recentOffers.length ? `
@@ -454,13 +467,13 @@ function renderOffersTable(searchTerm, filterType, filterStatus) {
 
   content.innerHTML = `
     <div class="toolbar">
-      <input class="search-input" id="offerSearch" placeholder="Szukaj po tytule, adresie..." value="${escHtml(searchTerm || '')}">
-      <select class="filter-select" id="offerFilterType">
+      <input class="search-input" id="offerSearch" aria-label="Szukaj ofert po tytule lub adresie" placeholder="Szukaj po tytule, adresie..." value="${escHtml(searchTerm || '')}">
+      <select class="filter-select" id="offerFilterType" aria-label="Filtruj wg typu transakcji">
         <option value="">Wszystkie typy</option>
         <option value="sprzedaz" ${filterType === 'sprzedaz' ? 'selected' : ''}>Sprzedaż</option>
         <option value="wynajem" ${filterType === 'wynajem' ? 'selected' : ''}>Wynajem</option>
       </select>
-      <select class="filter-select" id="offerFilterStatus">
+      <select class="filter-select" id="offerFilterStatus" aria-label="Filtruj wg statusu">
         <option value="">Wszystkie statusy</option>
         <option value="active" ${filterStatus === 'active' ? 'selected' : ''}>Aktywne</option>
         <option value="inactive" ${filterStatus === 'inactive' ? 'selected' : ''}>Nieaktywne</option>
@@ -470,7 +483,7 @@ function renderOffersTable(searchTerm, filterType, filterStatus) {
 
     <div class="card">
       <div class="card-header">
-        <div class="card-title">Oferty (${offers.length})</div>
+        <h2 class="card-title">Oferty (${offers.length})</h2>
       </div>
       ${offers.length ? `
         <div class="table-wrap">
@@ -575,7 +588,7 @@ function renderAddForm(prefill) {
   content.innerHTML = `
     <div class="card">
       <div class="card-header">
-        <div class="card-title">${prefill ? 'Edytuj ofertę' : 'Nowa oferta'}</div>
+        <h2 class="card-title">${prefill ? 'Edytuj ofertę' : 'Nowa oferta'}</h2>
       </div>
 
       <div class="form-row">
@@ -653,7 +666,7 @@ function renderAddForm(prefill) {
 
     <div class="card">
       <div class="card-header">
-        <div class="card-title">Lokalizacja</div>
+        <h2 class="card-title">Lokalizacja</h2>
       </div>
       <div class="form-row">
         <div class="form-field col-full">
@@ -679,7 +692,7 @@ function renderAddForm(prefill) {
 
     <div class="card">
       <div class="card-header">
-        <div class="card-title">Szczegóły nieruchomości</div>
+        <h2 class="card-title">Szczegóły nieruchomości</h2>
       </div>
       <div class="form-row">
         <div class="form-field">
@@ -759,7 +772,7 @@ function renderAddForm(prefill) {
 
     <div class="card">
       <div class="card-header">
-        <div class="card-title">Działka (opcjonalne)</div>
+        <h2 class="card-title">Działka (opcjonalne)</h2>
       </div>
       <div class="form-row">
         <div class="form-field">
@@ -784,7 +797,7 @@ function renderAddForm(prefill) {
 
     <div class="card">
       <div class="card-header">
-        <div class="card-title">Koszty i kontakt</div>
+        <h2 class="card-title">Koszty i kontakt</h2>
       </div>
       <div class="form-row">
         <div class="form-field">
@@ -818,7 +831,7 @@ function renderAddForm(prefill) {
 
     <div class="card">
       <div class="card-header">
-        <div class="card-title">Opis i media</div>
+        <h2 class="card-title">Opis i media</h2>
       </div>
       <div class="form-row">
         <div class="form-field col-full">
@@ -863,7 +876,7 @@ function renderAddForm(prefill) {
 
     <div class="card">
       <div class="card-header">
-        <div class="card-title">SEO (opcjonalne)</div>
+        <h2 class="card-title">SEO (opcjonalne)</h2>
       </div>
       <div class="form-row">
         <div class="form-field col-full">
@@ -881,7 +894,7 @@ function renderAddForm(prefill) {
 
     <div class="card">
       <div class="card-header">
-        <div class="card-title">Zdjęcia</div>
+        <h2 class="card-title">Zdjęcia</h2>
       </div>
       <div class="upload-zone" id="uploadZone">
         <input type="file" id="fileInput" multiple accept="image/*">
@@ -913,6 +926,7 @@ function renderAddForm(prefill) {
   renderImagesPreview();
   bindLiveCalculations();
   bindFormDirtyTracking();
+  wireFormLabels($('#pageContent'));
   state.formDirty = false;
 
   $('#submitOfferBtn').addEventListener('click', () => {
@@ -1269,7 +1283,7 @@ async function renderPreview() {
   content.innerHTML = `
     <div class="card" style="margin-bottom:24px">
       <div class="card-header">
-        <div class="card-title">Podgląd strony - tak wyglądają oferty na stronie</div>
+        <h2 class="card-title">Podgląd strony - tak wyglądają oferty na stronie</h2>
       </div>
       <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:16px">
         Poniżej widzisz podgląd ${activeOffers.length} aktywnych ofert tak jak będą wyglądać na stronie ofert.
@@ -1447,7 +1461,7 @@ function renderSettings() {
   content.innerHTML = `
     <div class="card">
       <div class="card-header">
-        <div class="card-title">Zmiana hasła</div>
+        <h2 class="card-title">Zmiana hasła</h2>
       </div>
       <div class="form-row">
         <div class="form-field">
@@ -1468,7 +1482,7 @@ function renderSettings() {
 
     <div class="card">
       <div class="card-header">
-        <div class="card-title">Informacje o backendzie</div>
+        <h2 class="card-title">Informacje o backendzie</h2>
       </div>
       <div class="form-row">
         <div class="form-field col-full">
@@ -1481,13 +1495,15 @@ function renderSettings() {
 
     <div class="card">
       <div class="card-header">
-        <div class="card-title">Konfiguracja panelu</div>
+        <h2 class="card-title">Konfiguracja panelu</h2>
       </div>
       <p style="font-size:.85rem;color:var(--text-muted);line-height:1.6">
         Aby zmienić adres API backendu, edytuj plik <code>admin-config.js</code> i ustaw poprawny adres w polu <code>API_BASE_URL</code>.
       </p>
     </div>
   `;
+
+  wireFormLabels($('#pageContent'));
 
   $('#changePassBtn').addEventListener('click', async () => {
     const current = $('#sCurrent').value;
